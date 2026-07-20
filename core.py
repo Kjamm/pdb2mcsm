@@ -1,4 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+THREE_TO_ONE = {"ALA":"A","ARG":"R","ASN":"N","ASP":"D","CYS":"C","GLN":"Q","GLU":"E",
+                "GLY":"G","HIS":"H","ILE":"I","LEU":"L","LYS":"K","MET":"M","PHE":"F",
+                "PRO":"P","SER":"S","THR":"T","TRP":"W","TYR":"Y","VAL":"V"}
 
 @dataclass
 class Atom :
@@ -13,6 +17,7 @@ class Atom :
 
 def read_atoms(path) :
     atoms = []
+
     with open(path) as fh :
         for line in fh :
             rec = line[:6].strip()
@@ -28,8 +33,26 @@ def read_atoms(path) :
                 element=line[76:78].strip(),   # 원소 기호
                 raw=line,                      # 원본 줄 보관 (커밋 6에서 재사용)
             ))
+
     return atoms
 
-a = read_atoms("/Users/jaeminkim/pdb2mcsm/pdb2mcsm/tests/fixtures/mini_raw.pdb")
-print(len(a))                    # 원자 총 개수
-print(a[0].resname, a[0].resnum) # 첫 잔기 이름/번호가 파일과 일치하는지
+@dataclass
+class Chain:
+    key: str
+    atom_lines: list = field(default_factory=list)
+    residues: list = field(default_factory=list)
+    seq: str = ""
+    orig_chain_id: str = ""
+    assigned_chain: str = ""
+    split_reason: str = ""
+
+def _add_line(chain, line):
+    """원자 줄 하나를 사슬에 추가. 잔기가 바뀌는 순간에만 residues에 새 항목을 넣는다."""
+    resnum = int(line[22:26])
+    icode = line[26]
+    resname = norm_resname(line[17:20].strip())  # 잔기명 정규화 (norm_resname은 커밋 5에서 정의)
+    chain.atom_lines.append(line)                # 원자 줄은 무조건 보관
+    key = (resnum, icode)                        # 이 원자가 속한 잔기의 식별키
+    # residues가 비었거나, 직전 잔기와 (번호,삽입코드)가 다르면 → 새 잔기 시작
+    if not chain.residues or (chain.residues[-1][0], chain.residues[-1][2]) != key:
+        chain.residues.append((resnum, resname, icode))
