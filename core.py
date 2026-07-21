@@ -131,3 +131,27 @@ def norm_resname(resname):
     """비표준 잔기명이면 표준으로 바꾸고, 아니면 그대로 반환."""
     r = resname.strip()
     return NONSTD_MAP.get(r, r) 
+
+def is_hydrogen(line):
+    """이 원자 줄이 수소인가? 원소 컬럼을 우선 보고, 비어있으면 원자 이름으로 판단."""
+    element = line[76:78].strip()
+    atom_name = line[12:16].strip()
+    if element:
+        return element == "H"
+    return atom_name.startswith("H") or (len(atom_name) > 1 and atom_name[0] in "123" and atom_name[1] == "H")
+
+def write_clean(path, header, chains, strip_h=True):
+    """정리된 사슬들을 PDB 형식으로 다시 써서 파일로 저장."""
+    out = list(header)
+    for c in chains:
+        for line in c.atom_lines:
+            if strip_h and is_hydrogen(line):
+                continue
+            resname = norm_resname(line[17:20].strip()).rjust(3)
+            resnum = int(line[22:26])
+            out.append(line[:17] + resname + " " + c.assigned_chain + "%4d" % resnum + line[26:])
+        out.append("TER\n")
+    out.append("END\n")
+    with open(path, "w") as fh:
+        fh.writelines(out)
+    return path
