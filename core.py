@@ -126,6 +126,9 @@ def parse_pdb(path, gap = 1) :
         c.seq = "".join(THREE_TO_ONE.get(rn, "X") for _, rn, _ in c.residues)
     if not chains:
         raise ValueError("No protein chains found.")
+    
+    if len(chains) < 2:
+        warnings.append(f"Only ONE chain detected (method: {method}). mCSM-PPI2 needs >=2 chains.")
     return header, chains, warnings, method
 
 def norm_resname(resname):
@@ -190,3 +193,12 @@ def build_ala_scan(chains, chain_id, start, end):
         elif one != "X":
             muts.append(f"{chain_id} {one}{resnum}A")
     return muts
+
+def summarize(chains):
+    """사람이 확인하기 좋게 사슬별 요약 행을 만든다: (체인, 잔기수, 첫잔기, 끝잔기, 분리근거)."""
+    rows = []
+    for c in chains:
+        first = f"{c.residues[0][1]}{c.residues[0][0]}"
+        last = f"{c.residues[-1][1]}{c.residues[-1][0]}"
+        rows.append((c.assigned_chain or c.key, len(c.residues), first, last, c.split_reason))
+    return rows
