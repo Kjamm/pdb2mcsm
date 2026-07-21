@@ -84,17 +84,35 @@ def parse_pdb(path, gap = 1) :
     def flush(c):
         if c.atom_lines: chains.append(c)
 
-    if len(present) >= 2:
+    if len(present) >= 1:
+        # 경로 A: 파일에 chain ID가 있으면 존중.
+        # 단, "같은 ID인데 TER/번호리셋으로 실제로는 여러 사슬"인 경우까지 잡기 위해
+        # ID별 1차 그룹핑 후, 각 그룹 안에서 TER 또는 번호 되돌아감으로 2차 분리한다.
         method = "existing chain IDs"
-        buckets = {}
+        chains = []
+        cur = None            # 현재 쌓는 중인 사슬
+        cur_cid = None        # 현재 원본 chain id
+        prev_num = None       # 직전 잔기 번호 (같은 그룹 내 리셋 감지용)
         for line in raw:
-            if line[:6].strip() not in ("ATOM","HETATM"): continue
+            rec = line[:6].strip()
+            if rec == "TER":              # TER는 무조건 사슬 경계
+                if cur: flush(cur); cur = None; prev_num = None
+                continue
+            if rec not in ("ATOM","HETATM"): continue
             if line[17:20].strip() in SKIP_RES: continue
             cid = line[21]
-            if cid not in buckets:
-                buckets[cid] = Chain(key=cid, orig_chain_id=cid, split_reason="existing chain ID")
-            _add_line(buckets[cid], line)
-        chains = list(buckets.values())
+            num = int(line[22:26])
+            # 새 사슬을 시작해야 하는가?
+            #  - 아직 사슬이 없음, 또는
+            #  - chain id가 바뀜, 또는
+            #  - 같은 id인데 번호가 되돌아감(리셋) → 실제로는 다른 분자
+            if cur is None or cid != cur_cid or (prev_num is not None and num < prev_num):
+                if cur: flush(cur)
+                cur = Chain(key=str(len(chains)), orig_chain_id=cid, split_reason="existing chain ID")
+                cur_cid = cid
+            _add_line(cur, line)
+            prev_num = num
+        if cur: flush(cur)
     else:
         ter = sum(1 for line in raw if line[:6].strip() == "TER")
         if ter >= 1:
