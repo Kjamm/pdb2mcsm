@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import string
 
 THREE_TO_ONE = {"ALA":"A","ARG":"R","ASN":"N","ASP":"D","CYS":"C","GLN":"Q","GLU":"E",
                 "GLY":"G","HIS":"H","ILE":"I","LEU":"L","LYS":"K","MET":"M","PHE":"F",
@@ -155,3 +156,16 @@ def write_clean(path, header, chains, strip_h=True):
     with open(path, "w") as fh:
         fh.writelines(out)
     return path
+
+def assign_chain_ids(chains, preferred=None):
+    """각 사슬에 단일 글자 체인 ID를 배정. 원본이 전부 있고 서로 다르면 그대로, 아니면 A,B,C..."""
+    origs = [c.orig_chain_id for c in chains]
+    if all(origs) and len(set(origs)) == len(origs):
+        for c in chains:
+            c.assigned_chain = c.orig_chain_id
+        return
+    used = set(); letters = list(string.ascii_uppercase)
+    for c in chains:
+        cid = (preferred or {}).get(c.key) or next(l for l in letters if l not in used)
+        c.assigned_chain = cid
+        used.add(cid)
