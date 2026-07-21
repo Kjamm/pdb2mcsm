@@ -8,7 +8,7 @@ MD 시뮬레이션 출력이나 그 밖의 raw 구조 파일은 mCSM-PPI2에 그
 
 ## 코랩에서 바로 쓰기 (설치 불필요)
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1is8nIMIMRTz3BbJSpFM4oRquwRRakQ8I?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kjamm/pdb2mcsm/blob/main/pdb2mcsm_colab.ipynb)
 
 PDB를 업로드하면 정리된 `_ready.pdb`를 받고, 원하면 alanine-scanning 돌연변이 목록까지 생성할 수 있습니다. 전부 입력칸으로 조작하며 코딩이 필요 없습니다.
 
