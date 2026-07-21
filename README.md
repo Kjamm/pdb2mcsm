@@ -1,6 +1,6 @@
 # pdb2mcsm
 
-[English](https://github.com/Kjamm/pdb2mcsm/blob/main/README.md) &nbsp; &nbsp;[한국어]()
+[English](https://github.com/Kjamm/pdb2mcsm/blob/main/README.md) &nbsp; &nbsp;[한국어](https://github.com/Kjamm/pdb2mcsm/blob/main/READMEKO.md)
 
 Clean and prepare protein complex PDB files for [mCSM-PPI2](https://biosig.lab.uq.edu.au/mcsm_ppi2/) ΔΔG analysis.
 
