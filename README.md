@@ -10,7 +10,7 @@ MD simulation outputs and other "raw" structure files often can't be fed directl
 
 ## Try it in Colab (no install)
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1is8nIMIMRTz3BbJSpFM4oRquwRRakQ8I?usp=sharing)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kjamm/pdb2mcsm/blob/main/pdb2mcsm_colab.ipynb)
 
 Upload a PDB, get a cleaned `_ready.pdb` back, and optionally generate an alanine-scanning mutation list — all through form fields, no coding required.
 
