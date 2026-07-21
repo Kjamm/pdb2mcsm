@@ -220,3 +220,28 @@ def summarize(chains):
         last = f"{c.residues[-1][1]}{c.residues[-1][0]}"
         rows.append((c.assigned_chain or c.key, len(c.residues), first, last, c.split_reason))
     return rows
+
+def renumber_chain(chains, chain_id, offset):
+    """지정한 사슬의 모든 잔기 번호에 offset을 더한다(빼려면 음수).
+    파일번호 → 논문번호처럼 번호 체계를 옮길 때 사용.
+    예: 파일에서 36번인 잔기를 98번으로 만들려면 offset=62.
+
+    chains 안의 원자 줄(atom_lines)과 잔기 목록(residues)을 모두 갱신하므로,
+    이 함수 호출 뒤 write_clean을 하면 새 번호로 저장된다."""
+    target = None
+    for c in chains:
+        if c.assigned_chain == chain_id or c.orig_chain_id == chain_id:
+            target = c; break
+    if target is None:
+        raise ValueError(f"chain {chain_id} not found")
+
+    new_lines = []
+    for line in target.atom_lines:
+        old_num = int(line[22:26])
+        new_num = old_num + offset
+        new_lines.append(line[:22] + "%4d" % new_num + line[26:])
+    target.atom_lines = new_lines
+
+    target.residues = [(num + offset, resname, icode)
+                       for (num, resname, icode) in target.residues]
+    return target
