@@ -25,13 +25,13 @@ def read_atoms(path) :
                 continue
             atoms.append(Atom(
                 record=rec,
-                name=line[12:16].strip(),      # 원자 이름 컬럼
-                resname=line[17:20].strip(),   # 잔기 이름 컬럼
-                chain_id=line[21].strip(),     # 체인 ID 한 글자. 공백이면 "" 이 됨
-                resnum=int(line[22:26]),       # 잔기 번호를 정수로 변환
-                icode=line[26],                # 삽입 코드 (한 글자, 공백 그대로 둠)
-                element=line[76:78].strip(),   # 원소 기호
-                raw=line,                      # 원본 줄 보관 (커밋 6에서 재사용)
+                name=line[12:16].strip(),
+                resname=line[17:20].strip(),
+                chain_id=line[21].strip(),
+                resnum=int(line[22:26]),
+                icode=line[26],
+                element=line[76:78].strip(),
+                raw=line,
             ))
 
     return atoms
@@ -47,12 +47,76 @@ class Chain:
     split_reason: str = ""
 
 def _add_line(chain, line):
-    """원자 줄 하나를 사슬에 추가. 잔기가 바뀌는 순간에만 residues에 새 항목을 넣는다."""
     resnum = int(line[22:26])
     icode = line[26]
-    resname = norm_resname(line[17:20].strip())  # 잔기명 정규화 (norm_resname은 커밋 5에서 정의)
-    chain.atom_lines.append(line)                # 원자 줄은 무조건 보관
-    key = (resnum, icode)                        # 이 원자가 속한 잔기의 식별키
+    resname = norm_resname(line[17:20].strip())
+    chain.atom_lines.append(line)
+    key = (resnum, icode)
     # residues가 비었거나, 직전 잔기와 (번호,삽입코드)가 다르면 → 새 잔기 시작
     if not chain.residues or (chain.residues[-1][0], chain.residues[-1][2]) != key:
         chain.residues.append((resnum, resname, icode))
+
+def parse_pdb(path, gap = 1) :
+    """PDB를 읽어 (헤더줄들, 사슬리스트, 경고리스트, 사용한분리방법) 반환."""
+    header, warnings, raw = [], [], []
+    with open(path) as fh:
+        for line in fh:
+            rec = line[:6].strip()
+            if rec == "CRYST1" and not raw:
+                header.append(line); continue
+            if rec in ("ATOM", "HETATM", "TER"):
+                raw.append(line)
+
+    present = set()
+    for line in raw:
+        if line[:6].strip() in ("ATOM","HETATM") and line[17:20].strip() not in SKIP_RES:
+            if line[21].strip():
+                present.add(line[21])
+
+    chains, method = [], ""
+    def flush(c):
+        if c.atom_lines: chains.append(c)
+
+    if len(present) >= 2:
+        method = "existing chain IDs"
+        buckets = {}
+        for line in raw:
+            if line[:6].strip() not in ("ATOM","HETATM"): continue
+            if line[17:20].strip() in SKIP_RES: continue
+            cid = line[21]
+            if cid not in buckets:
+                buckets[cid] = Chain(key=cid, orig_chain_id=cid, split_reason="existing chain ID")
+            _add_line(buckets[cid], line)
+        chains = list(buckets.values())
+    else:
+        ter = sum(1 for line in raw if line[:6].strip() == "TER")
+        if ter >= 1:
+            method = "TER records"
+            cur = Chain(key="0", split_reason="TER record")
+            for line in raw:
+                if line[:6].strip() == "TER":
+                    flush(cur); cur = Chain(key=str(len(chains)), split_reason="TER record"); continue
+                if line[:6].strip() not in ("ATOM","HETATM"): continue
+                if line[17:20].strip() in SKIP_RES: continue
+                _add_line(cur, line)
+            flush(cur)
+            if len(chains) < 2:
+                chains = []
+        if not chains:
+            method = "residue-number discontinuity (FALLBACK)"
+            warnings.append("No usable chain IDs or TER; chains inferred from residue-number jumps. VERIFY the split.")
+            cur = Chain(key="0", split_reason="resnum discontinuity"); prev = None
+            for line in raw:
+                if line[:6].strip() not in ("ATOM","HETATM"): continue
+                if line[17:20].strip() in SKIP_RES: continue
+                num = int(line[22:26])
+                if prev is not None and (num < prev or num - prev > gap + 1):
+                    flush(cur); cur = Chain(key=str(len(chains)), split_reason="resnum discontinuity")
+                _add_line(cur, line); prev = num
+            flush(cur)
+
+    for c in chains:
+        c.seq = "".join(THREE_TO_ONE.get(rn, "X") for _, rn, _ in c.residues)
+    if not chains:
+        raise ValueError("No protein chains found.")
+    return header, chains, warnings, method
