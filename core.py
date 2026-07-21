@@ -4,6 +4,12 @@ THREE_TO_ONE = {"ALA":"A","ARG":"R","ASN":"N","ASP":"D","CYS":"C","GLN":"Q","GLU
                 "GLY":"G","HIS":"H","ILE":"I","LEU":"L","LYS":"K","MET":"M","PHE":"F",
                 "PRO":"P","SER":"S","THR":"T","TRP":"W","TYR":"Y","VAL":"V"}
 
+NONSTD_MAP = {"HIE":"HIS","HID":"HIS","HIP":"HIS","HSD":"HIS","HSE":"HIS","HSP":"HIS",
+              "CYX":"CYS","CYM":"CYS","ASH":"ASP","GLH":"GLU","LYN":"LYS","ARN":"ARG","MSE":"MET"}
+
+SKIP_RES = {"HOH","WAT","TIP3","TIP","TIP4","SOL","NA","CL","SOD","CLA","POT",
+            "K","MG","ZN","CA","MN","FE","CU","SO4","PO4","GOL","EDO"}
+
 @dataclass
 class Atom :
     record : str
@@ -120,3 +126,8 @@ def parse_pdb(path, gap = 1) :
     if not chains:
         raise ValueError("No protein chains found.")
     return header, chains, warnings, method
+
+def norm_resname(resname):
+    """비표준 잔기명이면 표준으로 바꾸고, 아니면 그대로 반환."""
+    r = resname.strip()
+    return NONSTD_MAP.get(r, r) 
