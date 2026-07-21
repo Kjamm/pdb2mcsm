@@ -169,3 +169,24 @@ def assign_chain_ids(chains, preferred=None):
         cid = (preferred or {}).get(c.key) or next(l for l in letters if l not in used)
         c.assigned_chain = cid
         used.add(cid)
+
+def build_ala_scan(chains, chain_id, start, end):
+    """지정한 사슬의 [start, end] 구간 잔기를 alanine scanning 형식 목록으로 만든다."""
+    target = None
+    for c in chains:
+        if c.assigned_chain == chain_id:
+            target = c; break
+    if target is None:
+        raise ValueError(f"chain {chain_id} not found")
+    muts = []
+    for resnum, resname, icode in target.residues:
+        if not (start <= resnum <= end):
+            continue
+        one = THREE_TO_ONE.get(resname, "X") 
+        if one == "A":
+            muts.append(f"{chain_id} A{resnum}G")
+        elif one == "G":
+            muts.append(f"{chain_id} G{resnum}A")
+        elif one != "X":
+            muts.append(f"{chain_id} {one}{resnum}A")
+    return muts
