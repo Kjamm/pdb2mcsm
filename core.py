@@ -6,7 +6,14 @@ THREE_TO_ONE = {"ALA":"A","ARG":"R","ASN":"N","ASP":"D","CYS":"C","GLN":"Q","GLU
                 "PRO":"P","SER":"S","THR":"T","TRP":"W","TYR":"Y","VAL":"V"}
 
 NONSTD_MAP = {"HIE":"HIS","HID":"HIS","HIP":"HIS","HSD":"HIS","HSE":"HIS","HSP":"HIS",
-              "CYX":"CYS","CYM":"CYS","ASH":"ASP","GLH":"GLU","LYN":"LYS","ARN":"ARG","MSE":"MET"}
+              "CYX":"CYS","CYM":"CYS","ASH":"ASP","GLH":"GLU","LYN":"LYS","ARN":"ARG","MSE":"MET",
+              "SEP":"SER","S1P":"SER",
+              "TPO":"THR","T1P":"THR",
+              "PTR":"TYR","Y1P":"TYR","PTY":"TYR"}
+
+PHOSPHO_ATOMS = {"P","O1P","O2P","O3P","OP1","OP2","OP3","H1P","H2P","H3P","HOP2","HOP3"}
+
+PHOSPHO_RES = {"SEP","S1P","TPO","T1P","PTR","Y1P","PTY"}
 
 SKIP_RES = {"HOH","WAT","TIP3","TIP","TIP4","SOL","NA","CL","SOD","CLA","POT",
             "K","MG","ZN","CA","MN","FE","CU","SO4","PO4","GOL","EDO"}
@@ -59,7 +66,6 @@ def _add_line(chain, line):
     resname = norm_resname(line[17:20].strip())
     chain.atom_lines.append(line)
     key = (resnum, icode)
-    # residues가 비었거나, 직전 잔기와 (번호,삽입코드)가 다르면 → 새 잔기 시작
     if not chain.residues or (chain.residues[-1][0], chain.residues[-1][2]) != key:
         chain.residues.append((resnum, resname, icode))
 
@@ -85,27 +91,20 @@ def parse_pdb(path, gap = 1) :
         if c.atom_lines: chains.append(c)
 
     if len(present) >= 1:
-        # 경로 A: 파일에 chain ID가 있으면 존중.
-        # 단, "같은 ID인데 TER/번호리셋으로 실제로는 여러 사슬"인 경우까지 잡기 위해
-        # ID별 1차 그룹핑 후, 각 그룹 안에서 TER 또는 번호 되돌아감으로 2차 분리한다.
         method = "existing chain IDs"
         chains = []
-        cur = None            # 현재 쌓는 중인 사슬
-        cur_cid = None        # 현재 원본 chain id
-        prev_num = None       # 직전 잔기 번호 (같은 그룹 내 리셋 감지용)
+        cur = None
+        cur_cid = None
+        prev_num = None
         for line in raw:
             rec = line[:6].strip()
-            if rec == "TER":              # TER는 무조건 사슬 경계
+            if rec == "TER":
                 if cur: flush(cur); cur = None; prev_num = None
                 continue
             if rec not in ("ATOM","HETATM"): continue
             if line[17:20].strip() in SKIP_RES: continue
             cid = line[21]
             num = int(line[22:26])
-            # 새 사슬을 시작해야 하는가?
-            #  - 아직 사슬이 없음, 또는
-            #  - chain id가 바뀜, 또는
-            #  - 같은 id인데 번호가 되돌아감(리셋) → 실제로는 다른 분자
             if cur is None or cid != cur_cid or (prev_num is not None and num < prev_num):
                 if cur: flush(cur)
                 cur = Chain(key=str(len(chains)), orig_chain_id=cid, split_reason="existing chain ID")
@@ -144,18 +143,16 @@ def parse_pdb(path, gap = 1) :
         c.seq = "".join(THREE_TO_ONE.get(rn, "X") for _, rn, _ in c.residues)
     if not chains:
         raise ValueError("No protein chains found.")
-    
+
     if len(chains) < 2:
         warnings.append(f"Only ONE chain detected (method: {method}). mCSM-PPI2 needs >=2 chains.")
     return header, chains, warnings, method
 
 def norm_resname(resname):
-    """비표준 잔기명이면 표준으로 바꾸고, 아니면 그대로 반환."""
     r = resname.strip()
-    return NONSTD_MAP.get(r, r) 
+    return NONSTD_MAP.get(r, r)
 
 def is_hydrogen(line):
-    """이 원자 줄이 수소인가? 원소 컬럼을 우선 보고, 비어있으면 원자 이름으로 판단."""
     element = line[76:78].strip()
     atom_name = line[12:16].strip()
     if element:
@@ -163,11 +160,12 @@ def is_hydrogen(line):
     return atom_name.startswith("H") or (len(atom_name) > 1 and atom_name[0] in "123" and atom_name[1] == "H")
 
 def write_clean(path, header, chains, strip_h=True):
-    """정리된 사슬들을 PDB 형식으로 다시 써서 파일로 저장."""
     out = list(header)
     for c in chains:
         for line in c.atom_lines:
             if strip_h and is_hydrogen(line):
+                continue
+            if line[17:20].strip() in PHOSPHO_RES and line[12:16].strip() in PHOSPHO_ATOMS:
                 continue
             resname = norm_resname(line[17:20].strip()).rjust(3)
             resnum = int(line[22:26])
@@ -179,7 +177,6 @@ def write_clean(path, header, chains, strip_h=True):
     return path
 
 def assign_chain_ids(chains, preferred=None):
-    """각 사슬에 단일 글자 체인 ID를 배정. 원본이 전부 있고 서로 다르면 그대로, 아니면 A,B,C..."""
     origs = [c.orig_chain_id for c in chains]
     if all(origs) and len(set(origs)) == len(origs):
         for c in chains:
@@ -192,7 +189,6 @@ def assign_chain_ids(chains, preferred=None):
         used.add(cid)
 
 def build_ala_scan(chains, chain_id, start, end):
-    """지정한 사슬의 [start, end] 구간 잔기를 alanine scanning 형식 목록으로 만든다."""
     target = None
     for c in chains:
         if c.assigned_chain == chain_id:
@@ -203,7 +199,7 @@ def build_ala_scan(chains, chain_id, start, end):
     for resnum, resname, icode in target.residues:
         if not (start <= resnum <= end):
             continue
-        one = THREE_TO_ONE.get(resname, "X") 
+        one = THREE_TO_ONE.get(resname, "X")
         if one == "A":
             muts.append(f"{chain_id} A{resnum}G")
         elif one == "G":
@@ -213,7 +209,6 @@ def build_ala_scan(chains, chain_id, start, end):
     return muts
 
 def summarize(chains):
-    """사람이 확인하기 좋게 사슬별 요약 행을 만든다: (체인, 잔기수, 첫잔기, 끝잔기, 분리근거)."""
     rows = []
     for c in chains:
         first = f"{c.residues[0][1]}{c.residues[0][0]}"
@@ -222,7 +217,7 @@ def summarize(chains):
     return rows
 
 def renumber_chain(chains, chain_id, offset):
-    """지정한 사슬의 모든 잔기 번호에 offset을 더한다(빼려면 음수).
+    """지정한 사슬의 모든 잔기 번호에 offset을 더한다(빼려면 음수). 
     파일번호 → 논문번호처럼 번호 체계를 옮길 때 사용.
     예: 파일에서 36번인 잔기를 98번으로 만들려면 offset=62.
 
